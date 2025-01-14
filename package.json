@@ -1,10 +1,10 @@
 {
     "name": "create-workery",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "type": "module",
-    "main": "./dist/index.js",
+    "main": "dist/index.js",
     "bin": {
-        "create-workery": "./dist/index.js"
+        "create-workery": "dist/index.js"
     },
     "scripts": {
         "r": "rimraf dist && rimraf distr && rollup -c && node dist/index.js",
