@@ -140,10 +140,12 @@ async function main() {
             onState,
             message: "The directory where the application should be created",
             validate: (val): string | boolean => {
-                if (!slugPattern.test(val))
-                    return "Directory must be alphanumeric separated by hyphens (-)"
-                if (fs.existsSync(val))
+                if (!slugPattern.test(val) && val != ".")
+                    return "Directory must be alphanumeric separated by hyphens (-) or current directory (.)"
+                if (val != "." && fs.existsSync(val))
                     return `Directory "${val}" already exists. Please choose a different directory.`
+                if (val == "." && fs.readdirSync(".").length > 0)
+                    return "Current directory is not empty. Please choose a different directory or an empty directory."
                 return true
             }
         },
@@ -153,7 +155,7 @@ async function main() {
     const cloudflarePkg = npx == "yarn" && semver.lt(version, "2.0.0") ? "cloudflare": "cloudflare@latest"
     
     const templateUrl = templateUrls[template]
-    spawn.sync(npx, ["create", cloudflarePkg, "--template", templateUrl, "--lang", "ts", "--deploy", "false", directory], {
+    spawn.sync(npx, ["create", cloudflarePkg, "--template", templateUrl, "--lang", "ts", "--deploy", "false", "--git", "true", directory], {
         stdio: "inherit"
     })
 
