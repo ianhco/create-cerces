@@ -14,8 +14,13 @@ let templates = [
     {
         value: "d1-drizzle",
         title: "d1-drizzle",
-        description: "Get started with an SQL D1 Worker with Workery and Drizzle ORM",
-    }
+        description: "Get started with a Worker using D1 SQL with the Workery framework and Drizzle ORM",
+    },
+    {
+        value: "do-sql-drizzle",
+        title: "do-sql-drizzle",
+        description: "Get started with a Worker using Durable Objects SQL API integrated with the Workery framework and Drizzle ORM",
+    },
 ] satisfies prompts.Choice[]
 
 type TemplateKeys = typeof templates[number]['value']
@@ -23,6 +28,7 @@ type TemplateKeys = typeof templates[number]['value']
 let templateUrls: { [key in TemplateKeys]: string } = {
     "hello-world": "iann838/workery/templates/hello-world",
     "d1-drizzle": "iann838/workery/templates/d1-drizzle",
+    "do-sql-drizzle": "iann838/workery/templates/do-sql-drizzle",
 }
 
 type PmName = "pnpm" | "npm" | "yarn" | "bun"
@@ -203,6 +209,14 @@ async function main() {
         console.log(greyText("> Detect and generate migrations:"),  cyanText(`${npx} run migrations:generate`))
         console.log(greyText("> Apply migrations to local database:"),  cyanText(`${npx} run migrations:apply`))
         console.log(greyText("> Apply migrations to deployed database:"),  cyanText(`${npx} run migrations:apply --remote`))
+        console.log()
+    } else if (template == "do-sql-drizzle") {
+        console.log()
+        console.log("💻", boldText("Start developing"))
+        console.log(greyText("> Change directories:"),  cyanText(`cd ${directory}`))
+        console.log(greyText("> Start dev server:"),  cyanText(`${npx} run dev`))
+        console.log(greyText("> Deploy application:"),  cyanText(`${npx} run deploy`))
+        console.log(greyText("> Detect and generate migrations:"),  cyanText(`${npx} run migrations:generate`))
         console.log()
     }
 
