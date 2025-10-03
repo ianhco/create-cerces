@@ -24,9 +24,11 @@ export default {
         terser(),
     ],
     external: [
+        "fs",
+        "path",
+        "degit",
+        "chalk",
         "cross-spawn",
         "prompts",
-        "semver",
-        "which-pm-runs",
     ]
 }

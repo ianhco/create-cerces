@@ -1,225 +1,180 @@
-import prompts from "prompts"
-import spawn from "cross-spawn"
-import whichPmRuns from "which-pm-runs"
-import semver from "semver"
-import fs from "node:fs"
+#!/usr/bin/env node
 
-let slugPattern = /^[a-z0-9-]+$/
-let templates = [
-    {
-        value: "hello-world",
-        title: "hello-world",
-        description: "Get started with a basic Worker with Workery",
+// Dependencies used in this script:
+// - prompts: For interactive prompts
+// - degit: For cloning template from GitHub without full git history
+// - cross-spawn: For cross-platform process spawning
+// - chalk: For colored console output
+// - No other external dependencies; uses built-in Node.js modules: fs, path
+
+import * as fs from 'fs';
+import * as path from 'path';
+import spawn from 'cross-spawn';
+import prompts from 'prompts';
+import degit from 'degit';
+import chalk from 'chalk';
+
+const templates = {
+    bun: {
+        key: 'bun',
+        description: 'Node.js compatible ultra-fast runtime.',
+        requiresBun: true,
+        hasDevServer: true,
+        sedFiles: [],
     },
-    {
-        value: "d1-drizzle",
-        title: "d1-drizzle",
-        description: "Get started with a Worker using D1 SQL with the Workery framework and Drizzle ORM",
+    'cf-workers': {
+        key: 'cf-workers',
+        description: 'Serverless functions on Cloudflare Workers.',
+        requiresBun: false,
+        hasDevServer: true,
+        sedFiles: ['wrangler.jsonc'],
     },
-    {
-        value: "do-sql-drizzle",
-        title: "do-sql-drizzle",
-        description: "Get started with a Worker using Durable Objects SQL API integrated with the Workery framework and Drizzle ORM",
+    'aws-lambda': {
+        key: 'aws-lambda',
+        description: 'Serverless functions on AWS Lambda.',
+        requiresBun: false,
+        hasDevServer: false,
+        sedFiles: [],
     },
-] satisfies prompts.Choice[]
-
-type TemplateKeys = typeof templates[number]['value']
-
-let templateUrls: { [key in TemplateKeys]: string } = {
-    "hello-world": "iann838/workery/templates/hello-world",
-    "d1-drizzle": "iann838/workery/templates/d1-drizzle",
-    "do-sql-drizzle": "iann838/workery/templates/do-sql-drizzle",
-}
-
-type PmName = "pnpm" | "npm" | "yarn" | "bun"
-
-const detectPackageManager = () => {
-	const pmInfo = whichPmRuns() as { name: PmName, version: string } | undefined
-
-	let { name, version } = pmInfo ?? { name: "npm", version: "0.0.0" }
-
-	if (process.env.TEST_PM && process.env.TEST_PM_VERSION) {
-		name = process.env.TEST_PM as PmName
-		version = process.env.TEST_PM_VERSION
-		process.env.npm_config_user_agent = name
-	}
-
-	switch (name) {
-		case "pnpm":
-			if (semver.gt(version, "6.0.0")) {
-				return {
-					name,
-					version,
-					npm: "pnpm",
-					npx: "pnpm",
-					dlx: ["pnpm", "dlx"],
-				}
-			}
-			return {
-				name,
-				version,
-				npm: "pnpm",
-				npx: "pnpx",
-				dlx: ["pnpx"],
-			}
-		case "yarn":
-			if (semver.gt(version, "2.0.0")) {
-				return {
-					name,
-					version,
-					npm: "yarn",
-					npx: "yarn",
-					dlx: ["yarn", "dlx"],
-				}
-			}
-			return {
-				name,
-				version,
-				npm: "yarn",
-				npx: "yarn",
-				dlx: ["yarn"],
-			}
-		case "bun":
-			return {
-				name,
-				version,
-				npm: "bun",
-				npx: "bunx",
-				dlx: ["bunx"],
-			}
-
-		case "npm":
-		default:
-			return {
-				name,
-				version,
-				npm: "npm",
-				npx: "npx",
-				dlx: ["npx"],
-			}
-	}
-}
-
-function onState(state: prompts.Answers<any>) {
-    if (state.aborted) {
-        console.log()
-        console.log(redText("!"), "Operation aborted by user")
-        console.log()
-        process.exit(1)
-    }
-}
-
-const writeFile = (path: string, content: string) => {
-	try {
-		fs.writeFileSync(path, content);
-	} catch (error) {
-		throw new Error(error as string);
-	}
-}
-
-const readFile = (path: string) => {
-	try {
-		return fs.readFileSync(path, "utf-8");
-	} catch (error) {
-		throw new Error(error as string);
-	}
-}
-
-const redText = (text: string) => `\x1b[31m${text}\x1b[0m`
-const greenText = (text: string) => `\x1b[32m${text}\x1b[0m`
-const cyanText = (text: string) => `\x1b[36m${text}\x1b[0m`
-const greyText = (text: string) => `\x1b[90m${text}\x1b[0m`
-const boldText = (text: string) => `\x1b[1m${text}\x1b[0m`
+    docker: {
+        key: 'docker',
+        description: 'Containers deployable to Cloud Run, Container Apps, etc.',
+        requiresBun: true,
+        hasDevServer: true,
+        sedFiles: [],
+    },
+};
 
 async function main() {
-    const { directory, template }: { directory: string, template: TemplateKeys } = await prompts([
-        {
-            type: "select",
-            name: "template",
-            onState,
-            message: "Select a base template for your application",
-            choices: templates,
-        },
-        {
-            type: "text",
-            name: "directory",
-            onState,
-            message: "The directory where the application should be created",
-            validate: (val): string | boolean => {
-                if (!slugPattern.test(val) && val != ".")
-                    return "Directory must be alphanumeric separated by hyphens (-) or current directory (.)"
-                if (val != "." && fs.existsSync(val))
-                    return `Directory "${val}" already exists. Please choose a different directory.`
-                if (val == "." && fs.readdirSync(".").length > 0)
-                    return "Current directory is not empty. Please choose a different directory or an empty directory."
-                return true
+    try {
+        // Step 1: Ask for project directory
+        const { projectDir } = await prompts({
+            type: 'text',
+            name: 'projectDir',
+            message: 'Enter the directory for the new project (use "." for current directory):',
+            initial: '.',
+        });
+
+        const resolvedDir = path.resolve(projectDir);
+
+        // Check if directory exists and is empty
+        if (fs.existsSync(resolvedDir)) {
+            const files = fs.readdirSync(resolvedDir);
+            if (files.length > 0) {
+                console.error(chalk.bold(chalk.red(`⤬ Error: Directory \`${projectDir}\` is not empty.`)));
+                process.exit(1);
             }
-        },
-    ])
+        } else {
+            fs.mkdirSync(resolvedDir, { recursive: true });
+        }
 
-    const { npx, version } = detectPackageManager()
-    const cloudflarePkg = npx == "yarn" && semver.lt(version, "2.0.0") ? "cloudflare": "cloudflare@latest"
-    
-    const templateUrl = templateUrls[template]
-    spawn.sync(npx, ["create", cloudflarePkg, "--template", templateUrl, "--lang", "ts", "--deploy", "false", "--git", "true", directory], {
-        stdio: "inherit"
-    })
+        // Step 2: Select template
+        const templateChoices = Object.values(templates).map((t) => ({
+            title: `${t.key}: ${t.description}`,
+            value: t.key,
+        }));
 
-    if (!fs.existsSync(directory)) {
-        console.log()
-        console.log(redText("!"), "Failed to create the application directory")
-        console.log()
-        process.exit(1)
+        const { selectedTemplate }: { selectedTemplate: keyof typeof templates } = await prompts({
+            type: 'select',
+            name: 'selectedTemplate',
+            message: 'Select a template:',
+            choices: templateChoices,
+        });
+
+        const templateMeta = templates[selectedTemplate];
+
+        // Step 3: Clone template
+        console.log(chalk.bold(chalk.yellow(`⥕ Cloning template \`${selectedTemplate}\` into \`${projectDir}\`...`)));
+        const emitter = degit(`ianhco/cerces/templates/${selectedTemplate}`, { cache: false, force: true, verbose: true });
+        await emitter.clone(resolvedDir);
+        console.log(chalk.bold(chalk.green(`√ Template \`${selectedTemplate}\` cloned successfully.`)));
+
+        for (const sedFile of templateMeta.sedFiles) {
+            const filePath = path.join(resolvedDir, sedFile);
+            if (fs.existsSync(filePath)) {
+                let content = fs.readFileSync(filePath, 'utf-8');
+                content = content.replace(/%%DIR_NAME%%/g, path.basename(resolvedDir));
+                fs.writeFileSync(filePath, content, 'utf-8');
+            }
+        }
+
+        // Step 4: Ask to auto-install dependencies
+        const { autoInstall } = await prompts({
+            type: 'confirm',
+            name: 'autoInstall',
+            message: 'Do you want to automatically install dependencies?',
+            initial: true,
+        });
+
+        if (autoInstall) {
+            // Check if Bun is required and installed
+            if (templateMeta.requiresBun) {
+                const hasBun = commandExists('bun');
+                if (!hasBun) {
+                    const { installBun } = await prompts({
+                        type: 'confirm',
+                        name: 'installBun',
+                        message: 'Bun is not installed but required for this template. Install Bun globally using npm?',
+                        initial: true,
+                    });
+                    if (installBun) {
+                        console.log(chalk.bold(chalk.cyan(`⥕ Installing Bun globally...`)));
+                        spawn.sync('npm', ['install', '-g', 'bun'], { stdio: 'inherit' });
+                        console.log(chalk.bold(chalk.green(`√ Bun installed successfully.`)));
+                    } else {
+                        console.log(chalk.bold(chalk.yellow(`! Skipping Bun installation. You may need to install it manually.`)));
+                    }
+                }
+            }
+
+            // Detect package manager
+            const packageManager = detectPackageManager();
+
+            if (packageManager) {
+                console.log(chalk.bold(chalk.cyan(`∷ Installing dependencies using ${packageManager}...`)));
+                process.chdir(resolvedDir); // Change to project dir for install
+                if (packageManager === 'bun') {
+                    spawn.sync('bun', ['install'], { stdio: 'inherit' });
+                } else if (packageManager === 'pnpm') {
+                    spawn.sync('pnpm', ['install', '--config.auto-install-peers=true'], { stdio: 'inherit' });
+                } else if (packageManager === 'npm') {
+                    spawn.sync('npm', ['install'], { stdio: 'inherit' });
+                }
+                console.log(chalk.bold(chalk.green(`√ Dependencies installed successfully.`)));
+            } else {
+                console.log(chalk.bold(chalk.yellow(`! Unsupported package manager detected (e.g., yarn).`)));
+                console.log(chalk.bold(chalk.yellow(`! Please install dependencies manually, including peer dependencies of cerces.`)));
+            }
+
+            if (templateMeta.hasDevServer) {
+                console.log(`\n`)
+                console.log(chalk.bold(`√ Run \`${chalk.cyan(`${packageManager} run dev`)}\` to start the development server.`));
+            } else {
+                console.log(`\n`)
+                console.log(chalk.bold(chalk.yellow(`! This template does not include a development server.`)));
+                console.log(chalk.bold(chalk.yellow(`! Additional setup may be required specific to the \`${selectedTemplate}\` runtime.`)));
+            }
+        }
+
+        console.log(`\n`);
+        console.log(chalk.green(`√ Project created successfully in "${projectDir}".`));
+    } catch (error: any) {
+        console.error(chalk.red(`⤬ Error: ${error.message}`));
+        console.error(chalk.gray(error.stack));
+        process.exit(1);
     }
-
-    if (template == "hello-world") {
-        console.log()
-        console.log("💻", boldText("Start developing"))
-        console.log(greyText("> Change directories:"),  cyanText(`cd ${directory}`))
-        console.log(greyText("> Start dev server:"),  cyanText(`${npx} run dev`))
-        console.log(greyText("> Deploy application:"),  cyanText(`${npx} run deploy`))
-        console.log()
-    } else if (template == "d1-drizzle") {
-        const { d1Name } = await prompts([
-            {
-                type: "text",
-                name: "d1Name",
-                onState,
-                message: "Name of the D1 database (must be unique on your Cloudflare account)",
-                validate: (val) =>
-                    slugPattern.test(val) || "Database name must be alphanumeric separated by hyphens (-)",
-            },
-        ])
-
-        const wranglerFile = readFile(`${directory}/wrangler.toml`)
-        const packageFile = readFile(`${directory}/package.json`)
-        writeFile(`${directory}/wrangler.toml`, wranglerFile.replace(/<TBD_D1NAME>/, d1Name))
-        writeFile(`${directory}/package.json`, packageFile.replace(/<TBD_D1NAME>/, d1Name))
-        console.log(greenText("√"), "Updated wrangler.toml and package.json with D1 database name")
-
-        console.log()
-        console.log("🚣", boldText("Extra setup required, must be completed before deployment"))
-        console.log(greyText("> Change directories:"),  cyanText(`cd ${directory}`))
-        console.log(greyText("> Create the D1 database via Wrangler:"),  cyanText(`npx wrangler d1 create ${d1Name}`))
-        console.log(greyText("> Update the D1 database ID in"), greenText("wrangler.toml (under [[d1_databases]])"))
-        console.log()
-        console.log("💻", boldText("After setup completion, start developing"))
-        console.log(greyText("> Start dev server:"),  cyanText(`${npx} run dev`))
-        console.log(greyText("> Deploy application:"),  cyanText(`${npx} run deploy`))
-        console.log(greyText("> Detect and generate migrations:"),  cyanText(`${npx} run migrations:generate`))
-        console.log(greyText("> Apply migrations to local database:"),  cyanText(`${npx} run migrations:apply`))
-        console.log(greyText("> Apply migrations to deployed database:"),  cyanText(`${npx} run migrations:apply --remote`))
-        console.log()
-    } else if (template == "do-sql-drizzle") {
-        console.log()
-        console.log("💻", boldText("Start developing"))
-        console.log(greyText("> Change directories:"),  cyanText(`cd ${directory}`))
-        console.log(greyText("> Start dev server:"),  cyanText(`${npx} run dev`))
-        console.log(greyText("> Deploy application:"),  cyanText(`${npx} run deploy`))
-        console.log(greyText("> Detect and generate migrations:"),  cyanText(`${npx} run migrations:generate`))
-        console.log()
-    }
-
 }
 
-main()
+function commandExists(cmd: string): boolean {
+    const result = spawn.sync(cmd, ['--version'], { stdio: 'ignore' });
+    return result.status === 0;
+}
+
+function detectPackageManager(): 'bun' | 'pnpm' | 'npm' | null {
+    if (commandExists('bun')) return 'bun';
+    if (commandExists('pnpm')) return 'pnpm';
+    if (commandExists('npm')) return 'npm';
+    return null; // For yarn or others
+}
+
+main();

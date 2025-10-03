@@ -1,18 +1,19 @@
 {
-    "name": "create-workery",
-    "version": "1.0.2",
+    "name": "create-cerces",
+    "version": "2.0.0-beta.1",
     "type": "module",
     "main": "dist/index.js",
     "bin": {
-        "create-workery": "dist/index.js"
+        "create-cerces": "dist/index.js"
     },
     "scripts": {
-        "r": "rimraf dist && rimraf distr && rollup -c && node dist/index.js",
+        "this": "rimraf dist && rimraf distr && rollup -c && node dist/index.js",
         "build": "rimraf dist && rollup -c",
         "clear": "rimraf distr"
     },
     "engines": {
-        "node": ">=18.0.0"
+        "node": ">=18.0.0",
+        "bun": ">=1.0.0"
     },
     "files": [
         "dist"
@@ -21,9 +22,8 @@
         "@rollup/plugin-terser": "^0.2.1",
         "@rollup/plugin-typescript": "^12.1.2",
         "@types/cross-spawn": "^6.0.6",
+        "@types/degit": "^2.8.6",
         "@types/prompts": "^2.4.9",
-        "@types/semver": "^7.5.8",
-        "@types/which-pm-runs": "^1.0.2",
         "rimraf": "^5.0.5",
         "rollup": "^3.25.1",
         "tslib": "^2.8.1",
@@ -33,40 +33,43 @@
         "access": "public"
     },
     "keywords": [
-        "workery",
+        "cerces",
         "web",
         "app",
         "http",
         "application",
         "framework",
         "router",
-        "workers",
         "serverless",
         "cloudflare",
+        "workers",
+        "compute",
+        "bun",
+        "aws",
+        "lambda",
+        "functions",
         "openapi",
         "swagger",
         "openapi",
         "oas3.1",
-        "middleware",
-        "parameters",
         "typescript",
         "nodejs",
         "typed"
     ],
-    "author": "Jian Huang <iann838dev@gmail.com> (https://github.com/iann838)",
+    "author": "Ian Huang (https://github.com/ianhco)",
     "license": "MIT",
-    "homepage": "https://github.com/iann838/create-workery",
+    "homepage": "https://github.com/ianhco/create-cerces",
     "repository": {
         "type": "git",
-        "url": "git@github.com:iann838/create-workery.git"
+        "url": "git@github.com:ianhco/create-cerces.git"
     },
     "bugs": {
-        "url": "https://github.com/iann838/create-workery/issues"
+        "url": "https://github.com/ianhco/create-cerces/issues"
     },
     "dependencies": {
+        "chalk": "^5.6.2",
         "cross-spawn": "^7.0.6",
-        "prompts": "^2.4.2",
-        "semver": "^7.6.3",
-        "which-pm-runs": "^1.1.0"
+        "degit": "^2.8.4",
+        "prompts": "^2.4.2"
     }
 }
