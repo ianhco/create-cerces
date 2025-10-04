@@ -1,6 +1,6 @@
 {
     "name": "create-cerces",
-    "version": "2.0.0-beta.1",
+    "version": "2.0.1",
     "type": "module",
     "main": "dist/index.js",
     "bin": {

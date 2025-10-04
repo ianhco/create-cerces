@@ -1,12 +1,3 @@
-#!/usr/bin/env node
-
-// Dependencies used in this script:
-// - prompts: For interactive prompts
-// - degit: For cloning template from GitHub without full git history
-// - cross-spawn: For cross-platform process spawning
-// - chalk: For colored console output
-// - No other external dependencies; uses built-in Node.js modules: fs, path
-
 import * as fs from 'fs';
 import * as path from 'path';
 import spawn from 'cross-spawn';
@@ -17,35 +8,44 @@ import chalk from 'chalk';
 const templates = {
     bun: {
         key: 'bun',
-        description: 'Node.js compatible ultra-fast runtime.',
+        description: 'Ultra-Fast Node.js runtime with bundling and TypeScript. High performance and low overhead.',
         requiresBun: true,
         hasDevServer: true,
         sedFiles: [],
+        runScripts: [],
     },
     'cf-workers': {
         key: 'cf-workers',
-        description: 'Serverless functions on Cloudflare Workers.',
+        description: 'Edge serverless with automatic scaling, low latency, and integration with Cloudflare services.',
         requiresBun: false,
         hasDevServer: true,
         sedFiles: ['wrangler.jsonc'],
+        runScripts: ['cf-typegen'],
     },
     'aws-lambda': {
         key: 'aws-lambda',
-        description: 'Serverless functions on AWS Lambda.',
+        description: 'Traditional pay-per-use serverless computing, enables integration with the AWS ecosystem.',
         requiresBun: false,
         hasDevServer: false,
         sedFiles: [],
+        runScripts: [],
     },
     docker: {
         key: 'docker',
-        description: 'Containers deployable to Cloud Run, Container Apps, etc.',
+        description: 'Containerize Cerces for deployment on major cloud platforms (e.g. AWS, Azure, Google Cloud, etc.).',
         requiresBun: true,
         hasDevServer: true,
         sedFiles: [],
+        runScripts: [],
     },
 };
 
 async function main() {
+    const onCancel = () => {
+        console.log(chalk.bold(chalk.red('\n⤬ Operation cancelled.')));
+        process.exit(1);
+    };
+
     try {
         // Step 1: Ask for project directory
         const { projectDir } = await prompts({
@@ -53,7 +53,7 @@ async function main() {
             name: 'projectDir',
             message: 'Enter the directory for the new project (use "." for current directory):',
             initial: '.',
-        });
+        }, { onCancel });
 
         const resolvedDir = path.resolve(projectDir);
 
@@ -70,7 +70,8 @@ async function main() {
 
         // Step 2: Select template
         const templateChoices = Object.values(templates).map((t) => ({
-            title: `${t.key}: ${t.description}`,
+            title: t.key,
+            description: t.description,
             value: t.key,
         }));
 
@@ -79,7 +80,7 @@ async function main() {
             name: 'selectedTemplate',
             message: 'Select a template:',
             choices: templateChoices,
-        });
+        }, { onCancel });
 
         const templateMeta = templates[selectedTemplate];
 
@@ -104,7 +105,7 @@ async function main() {
             name: 'autoInstall',
             message: 'Do you want to automatically install dependencies?',
             initial: true,
-        });
+        }, { onCancel });
 
         if (autoInstall) {
             // Check if Bun is required and installed
@@ -116,7 +117,7 @@ async function main() {
                         name: 'installBun',
                         message: 'Bun is not installed but required for this template. Install Bun globally using npm?',
                         initial: true,
-                    });
+                    }, { onCancel });
                     if (installBun) {
                         console.log(chalk.bold(chalk.cyan(`⥕ Installing Bun globally...`)));
                         spawn.sync('npm', ['install', '-g', 'bun'], { stdio: 'inherit' });
@@ -146,21 +147,26 @@ async function main() {
                 console.log(chalk.bold(chalk.yellow(`! Please install dependencies manually, including peer dependencies of cerces.`)));
             }
 
+            for (const script of templateMeta.runScripts) {
+                if (packageManager) {
+                    console.log(chalk.bold(chalk.cyan(`∷ Running post-install script \`${script}\` using ${packageManager}...`)));
+                    spawn.sync(packageManager, ['run', script], { stdio: 'inherit' });
+                }
+            }
+
             if (templateMeta.hasDevServer) {
-                console.log(`\n`)
+                console.log();
                 console.log(chalk.bold(`√ Run \`${chalk.cyan(`${packageManager} run dev`)}\` to start the development server.`));
             } else {
-                console.log(`\n`)
+                console.log();
                 console.log(chalk.bold(chalk.yellow(`! This template does not include a development server.`)));
                 console.log(chalk.bold(chalk.yellow(`! Additional setup may be required specific to the \`${selectedTemplate}\` runtime.`)));
             }
         }
-
-        console.log(`\n`);
-        console.log(chalk.green(`√ Project created successfully in "${projectDir}".`));
+        console.log(chalk.bold(chalk.green(`√ Project created successfully in "${projectDir}".`)));
     } catch (error: any) {
-        console.error(chalk.red(`⤬ Error: ${error.message}`));
         console.error(chalk.gray(error.stack));
+        console.error(chalk.bold(chalk.red(`⤬ Error: ${error.message}`)));
         process.exit(1);
     }
 }
